@@ -29,6 +29,7 @@ Object.assign((globalThis.CLAUDE_EXT_I18N ??= {})['en'] ??= {}, {
 	"usage.peak": "PEAK",
 	"usage.tooltip_tokens": "{used} / {cap} tokens ({pct}%)",
 	"usage.tooltip_pct_used": "{pct}% used",
+	"usage.tooltip_elapsed": "Time elapsed: {pct}% of the window",
 	"usage.tooltip_dollars": "${used} / ${total} used",
 	"usage.tooltip_usage": "How much of your 5-hour quota you've used",
 	"usage.tooltip_timer": "When your 5-hour usage will reset",

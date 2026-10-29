@@ -29,6 +29,7 @@ Object.assign((globalThis.CLAUDE_EXT_I18N ??= {})['fr'] ??= {}, {
 	"usage.peak": "POINTE",
 	"usage.tooltip_tokens": "{used} / {cap} jetons ({pct} %)",
 	"usage.tooltip_pct_used": "{pct} % utilisé",
+	"usage.tooltip_elapsed": "Temps écoulé : {pct} % de la plage",
 	"usage.tooltip_dollars": "{used} $ / {total} $ utilisé",
 	"usage.tooltip_usage": "La part de votre quota de 5 heures déjà utilisée",
 	"usage.tooltip_timer": "Quand votre utilisation de 5 heures sera réinitialisée",

@@ -286,6 +286,46 @@ class ProgressBar {
 		this.container.appendChild(this.track);
 		this.container.style.cursor = 'help';
 		this.tooltip = createClaudeTooltip(this.container, '');
+
+		// The elapsed-time line rides along with whatever text the bar's tooltip is given, so the
+		// bar keeps a single tooltip instead of a second one fighting it for the same spot.
+		this.tooltipText = '';
+		this.elapsedText = '';
+		const setTooltipText = this.tooltip.updateText;
+		this.renderTooltip = () => setTooltipText(this.elapsedText ? `${this.tooltipText}\n${this.elapsedText}` : this.tooltipText);
+		this.tooltip.updateText = (text) => {
+			this.tooltipText = text;
+			this.renderTooltip();
+		};
+	}
+
+	// Elapsed share of the limit's window (0 to 1), drawn as a thin white line. Null hides it.
+	setElapsed(fraction) {
+		if (fraction == null) {
+			this.clearElapsed();
+			return;
+		}
+		if (!this.elapsedMarker) {
+			this.elapsedMarker = document.createElement('div');
+			this.elapsedMarker.className = 'ut-elapsed-marker';
+			this.track.appendChild(this.elapsedMarker);
+		}
+		const pct = fraction * 100;
+		this.elapsedMarker.style.left = `${pct}%`;
+		this.elapsedMarker.style.display = 'block';
+		const text = localize('usage.tooltip_elapsed', { pct: pct.toFixed(0) });
+		if (text !== this.elapsedText) {
+			this.elapsedText = text;
+			this.renderTooltip();
+		}
+	}
+
+	clearElapsed() {
+		if (this.elapsedMarker) this.elapsedMarker.style.display = 'none';
+		if (this.elapsedText) {
+			this.elapsedText = '';
+			this.renderTooltip();
+		}
 	}
 
 	updateProgress(total, maxTokens) {

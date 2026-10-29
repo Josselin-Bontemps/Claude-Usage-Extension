@@ -1,64 +1,231 @@
-name: Build CRX and Update Manifest
+name: Build CRX
+
+# Builds the Chrome variant of the extension, signs it with the EXTENSION_KEY secret, and publishes
+# the signed .crx, an unpacked .zip and the update.xml manifest to the `dist` branch.
+#
+# `dist` is an orphan branch rewritten on every build: it only ever holds the latest files, so the
+# binaries never pile up in the history of `main`, and `main` stays a clean fork of upstream.
+#
+# The build version is the manifest version plus the run number (6.1.4 -> 6.1.4.57). Chromium only
+# installs an update whose version is higher than the installed one, so every build must be.
+# Keep this file's name: the run number belongs to the workflow, and a new workflow restarts at 1.
+
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
+
+concurrency:
+  group: build-crx
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  DIST_BRANCH: dist
+  CRX_BASENAME: claude-usage-tracker
+
 jobs:
   build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout code
+      - name: Checkout (with the common submodule)
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
 
-      - name: Remove Ko-fi references in cards.js
-        run: |
-          sed -i '/ko-fi\.com/Id' common/ui/cards.js || true
-          sed -i '/addKofiButton/Id' common/ui/cards.js || true
-
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
+          cache: npm
 
-      - name: Build dataclasses and prepare manifest
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the build files
         run: |
-          npm install
           node scripts/build-dataclasses.js
-          cp manifest_chrome.json manifest.json
+          # Fails if i18n/all.js no longer matches the per-language tables.
+          node common/scripts/build-i18n.js --check
 
-      - name: Create ZIP archive
-        run: zip -r extension.zip . -x "*.git*" ".github/*" "node_modules/*" "scripts/*" "common/scripts/*"
-
-      - name: Pack CRX
-        uses: cardinalby/webext-buildtools-chrome-crx-action@v2
-        with:
-          zipFilePath: 'extension.zip'
-          privateKey: ${{ secrets.EXTENSION_KEY }}
-          crxFilePath: 'claude-usage-tracker-local.crx'
-        id: crx
-
-      - name: Generate update.xml
+      - name: Load the signing key and derive the extension ID
+        env:
+          EXTENSION_KEY: ${{ secrets.EXTENSION_KEY }}
         run: |
-          APP_ID="${{ steps.crx.outputs.extensionId }}"
-          VERSION=$(jq -r .version manifest.json)
-          URL="https://raw.githubusercontent.com/${{ github.repository }}/main/claude-usage-tracker-local.crx"
-          cat <<EOF > update.xml
+          if [ -z "$EXTENSION_KEY" ]; then
+            echo "::error::The EXTENSION_KEY secret is missing (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          KEY="$RUNNER_TEMP/key.pem"
+          # Normalised to PKCS#8, whichever PEM flavour the secret holds.
+          printf '%s\n' "$EXTENSION_KEY" | openssl pkey -out "$KEY"
+          chmod 600 "$KEY"
+          # Extension ID: first 128 bits of the SHA-256 of the DER public key, hex digits mapped to a-p.
+          EXT_ID=$(openssl pkey -in "$KEY" -pubout -outform DER | sha256sum | cut -c1-32 | tr '0-9a-f' 'a-p')
+          PUB_KEY=$(openssl pkey -in "$KEY" -pubout -outform DER | base64 -w0)
+          echo "KEY_FILE=$KEY" >> "$GITHUB_ENV"
+          echo "EXT_ID=$EXT_ID" >> "$GITHUB_ENV"
+          echo "PUB_KEY=$PUB_KEY" >> "$GITHUB_ENV"
+          echo "Extension ID: $EXT_ID"
+
+      - name: Stage the extension
+        run: |
+          RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${DIST_BRANCH}"
+          STAGE="$RUNNER_TEMP/ext"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+
+          # Same exclusions as build.sh, plus the repository plumbing and the other browsers' manifests.
+          # Unanchored patterns: each one matches at any depth (scripts/ and common/scripts/ alike).
+          tar -cf - \
+            --exclude='.git' --exclude='.git?*' --exclude='.github' \
+            --exclude='node_modules' --exclude='debug' --exclude='scripts' --exclude='docs' \
+            --exclude='README.md' --exclude='PRIVACY.md' --exclude='eslint.*' \
+            --exclude='package.json' --exclude='package-lock.json' --exclude='*.psd' \
+            --exclude='manifest_*.json' --exclude='manifest.json' \
+            --exclude='build.sh' --exclude='build.bat' --exclude='mirror-debug.bat' --exclude='run-android.ps1' \
+            --exclude='ui_screenshot.png' --exclude='*.crx' --exclude='*.zip' --exclude='update.xml' \
+            . | tar -xf - -C "$STAGE"
+
+          # manifest.json: the Chrome manifest, with the build version, the update URL (used by Brave
+          # for every update after the first install) and the public key (so an unpacked copy gets
+          # the same ID as the signed .crx).
+          RAW="$RAW" STAGE="$STAGE" RUN_NUMBER="$GITHUB_RUN_NUMBER" node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("manifest_chrome.json", "utf8"));
+            const base = m.version.split(".").slice(0, 3).join(".");
+            const run = Number(process.env.RUN_NUMBER);
+            if (!(run > 0 && run <= 65535)) throw new Error("Run number out of range: " + run);
+            m.version = `${base}.${run}`;
+            m.update_url = `${process.env.RAW}/update.xml`;
+            m.key = process.env.PUB_KEY;
+            fs.writeFileSync(`${process.env.STAGE}/manifest.json`, JSON.stringify(m, null, "\t") + "\n");
+            fs.appendFileSync(process.env.GITHUB_ENV, `EXT_VERSION=${m.version}\n`);
+            console.log("Version", m.version);
+          '
+
+          # Every file the manifest points to must have made it into the package.
+          STAGE="$STAGE" node -e '
+            const fs = require("fs"), path = require("path");
+            const dir = process.env.STAGE;
+            const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+            const exists = f => fs.existsSync(path.join(dir, f));
+            const required = [
+              m.background?.service_worker, m.action?.default_popup, m.action?.default_icon,
+              ...Object.values(m.icons || {}),
+              ...(m.content_scripts || []).flatMap(c => [...(c.js || []), ...(c.css || [])]),
+            ].filter(f => typeof f === "string");
+            const missing = required.filter(f => !exists(f));
+            if (missing.length) { console.error("Missing from the package:", missing); process.exit(1); }
+            // A missing web-accessible resource does not stop the extension from loading.
+            const war = (m.web_accessible_resources || []).flatMap(w => w.resources || []).filter(f => !f.includes("*"));
+            for (const f of war.filter(f => !exists(f))) console.log(`::warning::Web-accessible resource not found: ${f}`);
+            console.log(`${required.length + war.length} manifest references checked`);
+          '
+
+          echo "STAGE_DIR=$STAGE" >> "$GITHUB_ENV"
+          echo "RAW_BASE=$RAW" >> "$GITHUB_ENV"
+
+      - name: Pack and sign the CRX with Chrome
+        run: |
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)
+          if [ -z "$CHROME" ]; then echo "::error::No Chrome binary on the runner."; exit 1; fi
+          "$CHROME" --headless=new --no-sandbox --user-data-dir="$RUNNER_TEMP/chrome-profile" \
+            --pack-extension="$STAGE_DIR" --pack-extension-key="$KEY_FILE"
+          # Chrome writes <dir>.crx next to the packed folder.
+          test -s "$STAGE_DIR.crx"
+
+          # The ID Chrome wrote into the CRX header must be the one update.xml announces.
+          python3 - "$STAGE_DIR.crx" "$EXT_ID" <<'PY'
+          import struct, sys
+          data = open(sys.argv[1], 'rb').read()
+          assert data[:4] == b'Cr24', 'not a CRX file'
+          version, header_len = struct.unpack('<II', data[4:12])
+          assert version == 3, f'CRX version {version}, expected 3'
+          header = data[12:12 + header_len]
+          def varint(buf, i):
+              result = shift = 0
+              while True:
+                  byte = buf[i]; i += 1
+                  result |= (byte & 0x7f) << shift; shift += 7
+                  if byte < 0x80:
+                      return result, i
+          i, crx_id = 0, None
+          while i < len(header):
+              tag, i = varint(header, i)
+              length, i = varint(header, i)
+              value = header[i:i + length]; i += length
+              if tag >> 3 == 10000:  # signed_header_data -> SignedData.crx_id
+                  _, j = varint(value, 0)
+                  n, j = varint(value, j)
+                  crx_id = ''.join(chr(ord('a') + int(c, 16)) for c in value[j:j + n].hex())
+          assert crx_id == sys.argv[2], f'CRX ID {crx_id} != {sys.argv[2]}'
+          print('CRX ID verified:', crx_id)
+          PY
+
+      - name: Assemble the dist files
+        run: |
+          OUT="$RUNNER_TEMP/dist"
+          rm -rf "$OUT" && mkdir -p "$OUT"
+          CRX_NAME="${CRX_BASENAME}-${EXT_VERSION}.crx"
+
+          cp "$STAGE_DIR.crx" "$OUT/$CRX_NAME"
+          (cd "$STAGE_DIR" && zip -qr "$OUT/${CRX_BASENAME}.zip" .)
+
+          # Versioned file name: a cached copy of an older .crx can never be served for a newer version.
+          cat > "$OUT/update.xml" <<EOF
           <?xml version='1.0' encoding='UTF-8'?>
           <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-            <app appid='$APP_ID'>
-              <updatecheck codebase='$URL' version='$VERSION' />
+            <app appid='${EXT_ID}'>
+              <updatecheck codebase='${RAW_BASE}/${CRX_NAME}' version='${EXT_VERSION}' />
             </app>
           </gupdate>
           EOF
+          python3 -c "import sys, xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1])" "$OUT/update.xml"
 
-      - name: Commit and push generated files
+          cat > "$OUT/info.json" <<EOF
+          {
+            "id": "${EXT_ID}",
+            "version": "${EXT_VERSION}",
+            "update_url": "${RAW_BASE}/update.xml",
+            "crx": "${RAW_BASE}/${CRX_NAME}",
+            "zip": "${RAW_BASE}/${CRX_BASENAME}.zip",
+            "source_commit": "${GITHUB_SHA}"
+          }
+          EOF
+          python3 -m json.tool "$OUT/info.json" > /dev/null
+
+          echo "DIST_DIR=$OUT" >> "$GITHUB_ENV"
+          cat "$OUT/update.xml"
+
+      - name: Publish to the dist branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add claude-usage-tracker-local.crx update.xml
-          git commit -m "Auto-build CRX and update.xml" || exit 0
-          git push
+          cd "$DIST_DIR"
+          git init -q -b "$DIST_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Build ${EXT_VERSION} from ${GITHUB_SHA::7}"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${DIST_BRANCH}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Claude Usage Tracker (local) ${EXT_VERSION}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Extension ID | \`${EXT_ID}\` |"
+            echo "| Update URL | ${RAW_BASE}/update.xml |"
+            echo "| Policy value | \`${EXT_ID};${RAW_BASE}/update.xml\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/key.pem"

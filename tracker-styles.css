@@ -196,20 +196,20 @@
     /*padding: 0 0.5rem 0.5rem 0.5rem;*/
 }
 
-/* Repère de temps écoulé sur les barres de progression */
+/* Elapsed share of a limit's window. Sits inside the track, whose overflow: hidden keeps it to the
+   bar's height; position: relative makes the track its containing block. */
 .ut-progress-track {
-  position: relative !important;
+	position: relative;
 }
 
-.ut-time-marker {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background-color: #ffffff;
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.8), -1px 0 1px rgba(0, 0, 0, 0.6);
-  z-index: 2;
-  pointer-events: none;
-  transform: translateX(-50%);
-  border-radius: 1px;
+.ut-elapsed-marker {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	transform: translateX(-50%);
+	background: #ffffff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+	pointer-events: none;
+	z-index: 1;
 }

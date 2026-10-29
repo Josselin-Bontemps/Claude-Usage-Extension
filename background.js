@@ -63,21 +63,21 @@ browser.runtime.onInstalled?.addListener((details) => {
 });
 
 if (browser.contextMenus) {
-    browser.runtime.onInstalled.addListener(() => {
-        browser.contextMenus.create({
-            id: 'openDebugPage',
-            title: 'Open Debug Page',
-            contexts: ['action']
-        });
-    });
+	browser.runtime.onInstalled.addListener(() => {
+		browser.contextMenus.create({
+			id: 'openDebugPage',
+			title: 'Open Debug Page',
+			contexts: ['action']
+		});
+	});
 
-    browser.contextMenus.onClicked.addListener((info, tab) => {
-        if (info.menuItemId === 'openDebugPage') {
-            browser.tabs.create({
-                url: browser.runtime.getURL('common/log/viewer.html')
-            });
-        }
-    });
+	browser.contextMenus.onClicked.addListener((info, tab) => {
+		if (info.menuItemId === 'openDebugPage') {
+			browser.tabs.create({
+				url: browser.runtime.getURL('common/log/viewer.html')
+			});
+		}
+	});
 }
 
 

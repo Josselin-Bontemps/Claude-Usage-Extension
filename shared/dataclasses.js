@@ -22,6 +22,26 @@ export function isPeakHours() {
 //
 // It is only ever passed as an argument, never stored on a ConversationData - the conversation's own
 // unknown model is plain null, matching how every other absent field on that class is represented.
+// Length of each limit's window, used to place the elapsed-time marker on its bar.
+const LIMIT_WINDOW_MS = {
+	session: 5 * 60 * 60 * 1000,
+	weekly: 7 * 24 * 60 * 60 * 1000,
+	sonnetWeekly: 7 * 24 * 60 * 60 * 1000,
+	opusWeekly: 7 * 24 * 60 * 60 * 1000,
+	fableWeekly: 7 * 24 * 60 * 60 * 1000,
+};
+
+// Share (0 to 1) of a limit's window already elapsed, from its reset time. Null when the limit has
+// no known window, no reset time, has already reset, or resets further away than its window allows
+// (5% slack covers clock drift between claude.ai and this machine).
+export function limitElapsedFraction(limitKey, resetsAt, now = Date.now()) {
+	const windowMs = LIMIT_WINDOW_MS[limitKey];
+	if (!windowMs || !resetsAt) return null;
+	const remaining = resetsAt - now;
+	if (remaining <= 0 || remaining > windowMs * 1.05) return null;
+	return Math.min(Math.max(1 - remaining / windowMs, 0), 1);
+}
+
 export const MODEL_UNKNOWN = '__model_unknown__';
 
 // Model family (Opus/Sonnet/...) for an API model ID; null if unrecognized.
