@@ -97,7 +97,9 @@ Une tâche planifiée, `ClaudeUsageTracker-Update`, lance le script toutes les 3
 
 1. lit `info.json` sur la branche `dist` ;
 2. si la version publiée est plus récente, télécharge le `.zip`, vérifie son empreinte SHA-256 et sa version, puis le prépare dans `pending\` ;
-3. si Brave est fermé, remplace `extension\` par `pending\`. Si Brave est ouvert, la mise à jour attend un passage où il sera fermé.
+3. si Brave est fermé, remplace `extension\` par `pending\`. Si Brave est ouvert, le script reste en veille jusqu'à la fermeture de Brave, installe aussitôt, puis vérifie s'il existe une version encore plus récente.
+
+La veille ne consomme pas de processeur : Windows prévient le script quand le dernier processus `brave.exe` se termine. Pendant la veille, la tâche planifiée ne lance pas d'autre exemplaire du script.
 
 Le chemin du dossier ne change jamais, donc Brave n'a rien à reconfigurer : il lit la nouvelle version à son démarrage suivant. L'extension garde le même ID que sous Linux grâce à la clé publique du manifeste.
 
@@ -126,6 +128,7 @@ Le script crée la tâche planifiée, installe la dernière version et copie le 
 |---|---|
 | Vérifier tout de suite (Brave fermé) | `Start-ScheduledTask -TaskName ClaudeUsageTracker-Update` |
 | Lire le journal | `Get-Content "$env:LOCALAPPDATA\ClaudeUsageTracker\update.log" -Tail 20` |
+| Mettre à jour le script lui-même | relancer le bloc de la section « Mise en place » |
 | Tout désinstaller | `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\ClaudeUsageTracker\Update-ClaudeUsageTracker.ps1" -Uninstall` |
 
 Après une désinstallation, retirer aussi l'extension dans `brave://extensions`.

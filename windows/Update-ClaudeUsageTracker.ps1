@@ -13,7 +13,9 @@
       2. si la version publiée est plus récente que celle du dossier de l'extension, télécharge le
          .zip, vérifie son empreinte SHA-256 et le prépare dans le dossier pending ;
       3. installe la version préparée si Brave est fermé (ou si l'extension n'est pas encore
-         installée). Sinon, elle attend la prochaine vérification où Brave sera fermé.
+         installée). Si Brave est ouvert, le script reste en veille jusqu'à la fermeture de
+         Brave, installe aussitôt, puis vérifie s'il existe une version encore plus récente.
+         Pendant cette veille, la tâche planifiée ne lance pas d'autre exemplaire du script.
 
     -Install  crée le dossier, copie le script, crée la tâche planifiée (toutes les 30 minutes,
               sans droits administrateur) et fait une première vérification.
@@ -141,16 +143,34 @@ function Update-Pending {
     }
 }
 
+# Attend que tous les processus brave.exe soient terminés. Wait-Process est notifié par Windows à la
+# fin de chaque processus : l'attente ne consomme pas de processeur. La seconde vérification couvre
+# un Brave relancé juste après sa fermeture.
+function Wait-BraveExit {
+    do {
+        Get-Process -Name 'brave' -ErrorAction SilentlyContinue | Wait-Process -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 3
+    } while (Test-BraveRunning)
+}
+
 # Remplace extension\ par pending\. Le dossier garde le même chemin, donc Brave n'a rien à
 # reconfigurer : il lit la nouvelle version à son prochain démarrage.
+# Renvoie $true si le script a attendu la fermeture de Brave.
 function Install-Pending {
+    param([switch]$NoWait)
     $pending = Get-FolderVersion $PendingDir
-    if (-not $pending) { return }
+    if (-not $pending) { return $false }
 
     $installed = Get-FolderVersion $ExtensionDir
+    $waited = $false
     if ($installed -and (Test-BraveRunning)) {
-        Write-Log "Brave est ouvert : la version $pending sera installée à la prochaine vérification où Brave sera fermé."
-        return
+        if ($NoWait) {
+            Write-Log "Brave est ouvert : la version $pending sera installée dès sa fermeture (tâche planifiée)."
+            return $false
+        }
+        Write-Log "Brave est ouvert : la version $pending sera installée dès sa fermeture."
+        Wait-BraveExit
+        $waited = $true
     }
 
     $oldDir = Join-Path $Root 'extension.old'
@@ -169,16 +189,23 @@ function Install-Pending {
     } else {
         Write-Log "Version $pending installée dans $ExtensionDir."
     }
+    return $waited
 }
 
 function Invoke-Check {
+    param([switch]$NoWait)
     try {
         Update-Pending
     } catch {
         Write-Log "Vérification impossible : $($_.Exception.Message)" 'ERREUR'
     }
     try {
-        Install-Pending
+        $waited = Install-Pending -NoWait:$NoWait
+        # Une version plus récente a pu être publiée pendant que Brave était ouvert.
+        if ($waited) {
+            try { Update-Pending } catch { Write-Log "Vérification impossible : $($_.Exception.Message)" 'ERREUR' }
+            Install-Pending -NoWait | Out-Null
+        }
     } catch {
         Write-Log "Installation impossible : $($_.Exception.Message)" 'ERREUR'
     }
@@ -192,7 +219,7 @@ function Register-UpdateTask {
     $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument $arguments -WorkingDirectory $Root
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 30)
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-        -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew
+        -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew   # Zéro : pas de limite, la veille peut durer.
     $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
@@ -214,7 +241,8 @@ if ($Install) {
     }
     Register-UpdateTask
     Write-Log "Tâche planifiée « $TaskName » créée (vérification toutes les 30 minutes)."
-    Invoke-Check
+    # Pas d'attente ici : la tâche planifiée, lancée dans une minute, s'en charge sans bloquer cette fenêtre.
+    Invoke-Check -NoWait
 
     if (Get-FolderVersion $ExtensionDir) {
         try { Set-Clipboard -Value $ExtensionDir } catch { }
