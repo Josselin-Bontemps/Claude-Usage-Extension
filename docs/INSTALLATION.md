@@ -80,17 +80,55 @@ Désactiver la version du Chrome Web Store si elle est encore installée, pour �
 
 ## Installation sur Brave sous Windows
 
-Sous Windows, Chromium (et donc Brave) n'installe par stratégie une extension hébergée hors du Chrome Web Store que si l'ordinateur est joint à un domaine Active Directory, à Entra ID (Azure AD) ou inscrit dans une gestion d'entreprise. Sur un ordinateur personnel, la stratégie `ExtensionInstallForcelist` est acceptée mais l'extension est bloquée.
+Sous Windows, Chromium (et donc Brave) n'installe par stratégie une extension hébergée hors du Chrome Web Store que si l'ordinateur est joint à un domaine Active Directory, à Entra ID (Azure AD) ou inscrit dans une gestion d'entreprise. Sur un ordinateur personnel, l'extension est donc chargée comme extension non empaquetée, et le script `windows/Update-ClaudeUsageTracker.ps1` la tient à jour.
 
-La méthode qui fonctionne sur un ordinateur personnel est le chargement d'un dossier :
+### Fonctionnement du script
 
-1. télécharger `claude-usage-tracker.zip` depuis la branche `dist` : `https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/claude-usage-tracker.zip` ;
-2. le décompresser dans un dossier conservé, par exemple `C:\Extensions\claude-usage-tracker` ;
-3. ouvrir `brave://extensions`, activer le **mode développeur**, cliquer sur **Charger l'extension non empaquetée** et choisir ce dossier.
+Tout est rangé dans `%LOCALAPPDATA%\ClaudeUsageTracker` :
 
-L'extension garde le même ID que sous Linux grâce à la clé publique du manifeste.
+| Élément | Rôle |
+|---|---|
+| `extension\` | dossier chargé par Brave |
+| `pending\` | version téléchargée, en attente de la fermeture de Brave |
+| `update.log` | journal des vérifications (500 dernières lignes) |
+| `Update-ClaudeUsageTracker.ps1` | copie du script utilisée par la tâche planifiée |
 
-Pour une mise à jour : remplacer le contenu du dossier par celui du nouveau `.zip`, puis cliquer sur le bouton de rechargement de l'extension dans `brave://extensions`. Brave relit aussi le dossier à chaque démarrage.
+Une tâche planifiée, `ClaudeUsageTracker-Update`, lance le script toutes les 30 minutes, sans fenêtre et sans droits administrateur. À chaque passage, le script :
+
+1. lit `info.json` sur la branche `dist` ;
+2. si la version publiée est plus récente, télécharge le `.zip`, vérifie son empreinte SHA-256 et sa version, puis le prépare dans `pending\` ;
+3. si Brave est fermé, remplace `extension\` par `pending\`. Si Brave est ouvert, la mise à jour attend un passage où il sera fermé.
+
+Le chemin du dossier ne change jamais, donc Brave n'a rien à reconfigurer : il lit la nouvelle version à son démarrage suivant. L'extension garde le même ID que sous Linux grâce à la clé publique du manifeste.
+
+### Mise en place
+
+Dans `brave://settings/system`, désactiver **Continuer à exécuter les applications en arrière-plan après la fermeture de Brave**. Sinon Brave ne se ferme jamais vraiment et les mises à jour restent en attente.
+
+Dans une fenêtre PowerShell ordinaire (sans droits administrateur) :
+
+```powershell
+$dir = "$env:LOCALAPPDATA\ClaudeUsageTracker"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/main/windows/Update-ClaudeUsageTracker.ps1" -OutFile "$dir\Update-ClaudeUsageTracker.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$dir\Update-ClaudeUsageTracker.ps1" -Install
+```
+
+Le script crée la tâche planifiée, installe la dernière version et copie le chemin du dossier dans le presse-papiers. Ensuite, dans Brave :
+
+1. ouvrir `brave://extensions` et activer le **mode développeur** ;
+2. cliquer sur **Charger l'extension non empaquetée** et coller le chemin `%LOCALAPPDATA%\ClaudeUsageTracker\extension` (développé, par exemple `C:\Users\<nom>\AppData\Local\ClaudeUsageTracker\extension`) ;
+3. supprimer la version du Chrome Web Store si elle est installée.
+
+### Utilisation courante
+
+| Besoin | Commande PowerShell |
+|---|---|
+| Vérifier tout de suite (Brave fermé) | `Start-ScheduledTask -TaskName ClaudeUsageTracker-Update` |
+| Lire le journal | `Get-Content "$env:LOCALAPPDATA\ClaudeUsageTracker\update.log" -Tail 20` |
+| Tout désinstaller | `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\ClaudeUsageTracker\Update-ClaudeUsageTracker.ps1" -Uninstall` |
+
+Après une désinstallation, retirer aussi l'extension dans `brave://extensions`.
 
 ## Synchronisation avec le dépôt d'origine
 

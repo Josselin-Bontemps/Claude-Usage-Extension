@@ -15,6 +15,7 @@ on:
     branches: [main]
     paths-ignore:
       - 'docs/**'
+      - 'windows/**'
       - '**/*.md'
   workflow_dispatch:
 
@@ -83,7 +84,7 @@ jobs:
           # Unanchored patterns: each one matches at any depth (scripts/ and common/scripts/ alike).
           tar -cf - \
             --exclude='.git' --exclude='.git?*' --exclude='.github' \
-            --exclude='node_modules' --exclude='debug' --exclude='scripts' --exclude='docs' \
+            --exclude='node_modules' --exclude='debug' --exclude='scripts' --exclude='docs' --exclude='windows' \
             --exclude='README.md' --exclude='PRIVACY.md' --exclude='eslint.*' \
             --exclude='package.json' --exclude='package-lock.json' --exclude='*.psd' \
             --exclude='manifest_*.json' --exclude='manifest.json' \
@@ -175,6 +176,7 @@ jobs:
 
           cp "$STAGE_DIR.crx" "$OUT/$CRX_NAME"
           (cd "$STAGE_DIR" && zip -qr "$OUT/${CRX_BASENAME}.zip" .)
+          ZIP_SHA256=$(sha256sum "$OUT/${CRX_BASENAME}.zip" | cut -d' ' -f1)
 
           # Versioned file name: a cached copy of an older .crx can never be served for a newer version.
           cat > "$OUT/update.xml" <<EOF
@@ -194,6 +196,7 @@ jobs:
             "update_url": "${RAW_BASE}/update.xml",
             "crx": "${RAW_BASE}/${CRX_NAME}",
             "zip": "${RAW_BASE}/${CRX_BASENAME}.zip",
+            "zip_sha256": "${ZIP_SHA256}",
             "source_commit": "${GITHUB_SHA}"
           }
           EOF
