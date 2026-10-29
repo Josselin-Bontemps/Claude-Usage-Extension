@@ -94,7 +94,7 @@ function Remove-Folder {
 # Télécharge la version publiée dans pending\ si elle est plus récente que ce qui est installé ou
 # déjà préparé.
 function Update-Pending {
-    $info = Invoke-RestMethod -Uri $InfoUrl -UseBasicParsing -Headers @{ 'Cache-Control' = 'no-cache' }
+    $info = Invoke-RestMethod -Uri $InfoUrl -UseBasicParsing
     $published = [version]$info.version
     $installed = Get-FolderVersion $ExtensionDir
     $pending   = Get-FolderVersion $PendingDir
@@ -113,12 +113,15 @@ function Update-Pending {
     $tempDir = Join-Path $Root 'pending.new'
     try {
         Write-Log "Téléchargement de la version $published."
-        Invoke-WebRequest -Uri $info.zip -OutFile $tempZip -UseBasicParsing -Headers @{ 'Cache-Control' = 'no-cache' }
+        Invoke-WebRequest -Uri $info.zip -OutFile $tempZip -UseBasicParsing
 
+        # raw.githubusercontent.com garde chaque fichier en cache jusqu'à 5 minutes : juste après une
+        # publication, info.json et le .zip peuvent venir de deux compilations différentes. L'empreinte
+        # le détecte, et le passage suivant réessaie.
         if ($info.zip_sha256) {
             $hash = (Get-FileHash -Path $tempZip -Algorithm SHA256).Hash.ToLowerInvariant()
             if ($hash -ne $info.zip_sha256.ToLowerInvariant()) {
-                throw "Empreinte SHA-256 différente de celle d'info.json (fichier en cours de publication ou altéré)."
+                throw "Empreinte SHA-256 du .zip différente de celle d'info.json (publication récente encore en cache, ou fichier altéré). Nouvel essai au prochain passage."
             }
         }
 
