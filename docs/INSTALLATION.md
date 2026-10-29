@@ -51,19 +51,19 @@ Conserver une copie du fichier `.pem` dans un gestionnaire de mots de passe. Une
 
 | Élément | Valeur |
 |---|---|
-| ID | voir `info.json` sur la branche `dist`, ou le résumé de l'exécution |
-| URL de mise à jour | `https://raw.githubusercontent.com/Josselin-Bontemps/claude-usage-extension/dist/update.xml` |
-| Valeur de stratégie | `<ID>;https://raw.githubusercontent.com/Josselin-Bontemps/claude-usage-extension/dist/update.xml` |
+| ID | `lahnmifnmckcjdoaloiamjjdoohmklfb` (aussi dans `info.json` sur la branche `dist`) |
+| URL de mise à jour | `https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/update.xml` |
+| Valeur de stratégie | `lahnmifnmckcjdoaloiamjjdoohmklfb;https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/update.xml` |
 
 ## Installation sur Brave sous Linux (Bazzite)
 
 Brave lit ses stratégies dans `/etc/brave/policies/managed/`, qu'il soit installé en Flatpak (le paquet Flathub a accès au `/etc` de l'hôte pour cette raison) ou en paquet natif. Sur Bazzite, `/etc` reste modifiable malgré le système immuable.
 
-Remplacer `<ID>` par l'ID réel, fermer complètement Brave, puis exécuter :
+Fermer complètement Brave, puis exécuter :
 
 ```bash
-ID="<ID>"
-URL="https://raw.githubusercontent.com/Josselin-Bontemps/claude-usage-extension/dist/update.xml"
+ID="lahnmifnmckcjdoaloiamjjdoohmklfb"
+URL="https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/update.xml"
 sudo mkdir -p /etc/brave/policies/managed
 printf '{\n  "ExtensionInstallForcelist": ["%s;%s"]\n}\n' "$ID" "$URL" | sudo tee /etc/brave/policies/managed/claude-usage-tracker.json
 ```
@@ -84,7 +84,7 @@ Sous Windows, Chromium (et donc Brave) n'installe par stratégie une extension h
 
 La méthode qui fonctionne sur un ordinateur personnel est le chargement d'un dossier :
 
-1. télécharger `claude-usage-tracker.zip` depuis la branche `dist` : `https://raw.githubusercontent.com/Josselin-Bontemps/claude-usage-extension/dist/claude-usage-tracker.zip` ;
+1. télécharger `claude-usage-tracker.zip` depuis la branche `dist` : `https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/claude-usage-tracker.zip` ;
 2. le décompresser dans un dossier conservé, par exemple `C:\Extensions\claude-usage-tracker` ;
 3. ouvrir `brave://extensions`, activer le **mode développeur**, cliquer sur **Charger l'extension non empaquetée** et choisir ce dossier.
 
