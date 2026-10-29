@@ -1,0 +1,60 @@
+name: Build CRX and Update Manifest
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Remove Ko-fi references in cards.js
+        run: |
+          sed -i '/ko-fi\.com/Id' common/ui/cards.js || true
+          sed -i '/addKofiButton/Id' common/ui/cards.js || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build dataclasses
+        run: |
+          npm install
+          node scripts/build-dataclasses.js
+
+      - name: Pack CRX
+        uses: cardinalby/webext-buildtools-chrome-crx-action@v2
+        with:
+          sourceDir: '.'
+          privateKey: ${{ secrets.EXTENSION_KEY }}
+          crxFilePath: 'claude-usage-tracker-local.crx'
+        id: crx
+
+      - name: Generate update.xml
+        run: |
+          APP_ID="${{ steps.crx.outputs.extensionId }}"
+          VERSION=$(jq -r .version manifest_chrome.json)
+          URL="https://raw.githubusercontent.com/${{ github.repository }}/main/claude-usage-tracker-local.crx"
+          cat <<EOF > update.xml
+          <?xml version='1.0' encoding='UTF-8'?>
+          <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+            <app appid='$APP_ID'>
+              <updatecheck codebase='$URL' version='$VERSION' />
+            </app>
+          </gupdate>
+          EOF
+
+      - name: Commit and push generated files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add claude-usage-tracker-local.crx update.xml
+          git commit -m "Auto-build CRX and update.xml" || exit 0
+          git push
