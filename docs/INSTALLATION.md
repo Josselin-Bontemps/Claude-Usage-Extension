@@ -1,13 +1,16 @@
 # Claude Usage Tracker (local) : compilation et installation sur Brave
 
-Ce dépôt est un fork de [lugia19/Claude-Usage-Extension](https://github.com/lugia19/Claude-Usage-Extension) avec deux différences d'interface :
+Ce dépôt est un fork de [lugia19/Claude-Usage-Extension](https://github.com/lugia19/Claude-Usage-Extension). Il s'en distingue par les points suivants :
 
-- aucune demande de don (bouton du popup, menu du clic droit sur l'icône, lien en bas de la barre latérale, carte de palier de jetons, bouton Ko-fi de la carte de mise à jour) ;
-- un repère blanc sur chaque barre de limite (session de 5 heures et limites hebdomadaires) qui indique la part de la plage déjà écoulée. L'infobulle de la barre ajoute la ligne « Temps écoulé : X % de la plage ». Si le remplissage bleu dépasse le repère, la consommation va plus vite que le temps.
+- **aucune demande de don** : ni bouton dans le popup, ni entrée dans le menu du clic droit sur l'icône, ni lien Ko-fi dans la barre latérale, ni carte de palier de jetons ;
+- **barre latérale épurée** : pas de liens « Version Claude Desktop », « Claude QoL » ni « Signaler un bug », et pas d'interrupteurs correspondants dans les paramètres. L'espace sous les barres se limite à une marge de 8 px après la dernière barre affichée ;
+- **aucune carte flottante** : ni carte « Mise à jour vers la version X » (elle apparaîtrait après chaque compilation du fork), ni carte d'invitation à noter l'extension ;
+- **repère de temps écoulé** : un trait blanc sur chaque barre de limite (session de 5 heures et limites hebdomadaires) indique la part de la plage déjà écoulée. L'infobulle de la barre ajoute la ligne « Temps écoulé : X % de la plage ». Si le remplissage bleu dépasse le repère, la consommation va plus vite que le temps ;
+- **nom distinct** : « Claude Usage Tracker (local) », pour ne pas confondre avec la version du Chrome Web Store.
 
 ## Fonctionnement de la compilation
 
-Le workflow `.github/workflows/build-crx.yml` se lance à chaque push sur `main` (sauf si seuls des fichiers `.md` ou `docs/` changent) et peut aussi être lancé à la main depuis l'onglet **Actions**, bouton **Run workflow**.
+Le workflow `.github/workflows/build-crx.yml` se lance à chaque push sur `main` (sauf si seuls des fichiers `.md`, `docs/` ou `windows/` changent) et peut aussi être lancé à la main depuis l'onglet **Actions**, bouton **Run workflow**.
 
 Il effectue les étapes suivantes :
 
@@ -25,7 +28,7 @@ Il effectue les étapes suivantes :
 | `update.xml` | manifeste de mise à jour (protocole Omaha) lu par Brave |
 | `claude-usage-tracker-X.Y.Z.N.crx` | extension signée |
 | `claude-usage-tracker.zip` | même contenu, non empaqueté (installation manuelle) |
-| `info.json` | ID, version et adresses utiles |
+| `info.json` | ID, version, adresses utiles et empreinte SHA-256 du `.zip` |
 
 La branche `dist` est réécrite à chaque compilation et ne contient que la dernière version. Les fichiers binaires n'encombrent donc pas l'historique de `main`, et `main` reste facile à synchroniser avec le dépôt d'origine.
 
@@ -133,6 +136,26 @@ Le script crée la tâche planifiée, installe la dernière version et copie le 
 
 Après une désinstallation, retirer aussi l'extension dans `brave://extensions`.
 
+### Vérifier l'état
+
+Ce bloc ne fait que lire l'état (après un collage, appuyer sur Entrée pour exécuter la dernière ligne) :
+
+```powershell
+$dir = "$env:LOCALAPPDATA\ClaudeUsageTracker"
+Write-Host "--- Tâche planifiée"; $t = Get-ScheduledTask -TaskName ClaudeUsageTracker-Update; $i = $t | Get-ScheduledTaskInfo
+[pscustomobject]@{ Etat = $t.State; DernierPassage = $i.LastRunTime; Resultat = $i.LastTaskResult; ProchainPassage = $i.NextRunTime } | Format-List
+Write-Host "--- Version installée"; (Get-Content "$dir\extension\manifest.json" -Raw | ConvertFrom-Json).version
+Write-Host "--- Version en attente"; $p = "$dir\pending\manifest.json"; if (Test-Path $p) { (Get-Content $p -Raw | ConvertFrom-Json).version } else { "aucune" }
+Write-Host "--- Brave ouvert"; [bool](Get-Process brave -ErrorAction SilentlyContinue)
+Write-Host "--- Journal"; Get-Content "$dir\update.log" -Tail 6
+```
+
+| Valeur | Signification |
+|---|---|
+| Etat `Running`, Resultat `267009` | le script est en veille et attend la fermeture de Brave pour installer la version en attente |
+| Etat `Ready`, Resultat `0` | dernier passage réussi, rien en attente |
+| Version en attente différente de « aucune » | une mise à jour est téléchargée et sera installée à la fermeture de Brave |
+
 ## Synchronisation avec le dépôt d'origine
 
 Quand l'auteur publie une nouvelle version : bouton **Sync fork** sur la page du dépôt. Le push sur `main` relance la compilation, et Brave sous Linux reçoit la mise à jour automatiquement.
@@ -144,4 +167,4 @@ Si GitHub signale un conflit, il porte sur l'un des fichiers modifiés par ce fo
 - `shared/dataclasses.js`, `tracker-styles.css`, `manifest_chrome.json` ;
 - `i18n/en.js`, `i18n/fr.js` et `i18n/all.js` (régénéré par `node common/scripts/build-i18n.js`).
 
-Le sous-module `common` n'est pas modifié : le bouton Ko-fi de la carte de mise à jour est neutralisé depuis `content-components/notification_card.js`.
+Le sous-module `common` n'est pas modifié : les cartes flottantes qu'il fournit ne sont simplement plus appelées par `content-components/notification_card.js`.
