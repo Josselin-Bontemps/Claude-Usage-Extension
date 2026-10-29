@@ -22,17 +22,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Build dataclasses
         run: |
           npm install
           node scripts/build-dataclasses.js
 
+      - name: Create ZIP archive
+        run: zip -r extension.zip . -x "*.git*" ".github/*" "node_modules/*" "scripts/*" "common/scripts/*"
+
       - name: Pack CRX
         uses: cardinalby/webext-buildtools-chrome-crx-action@v2
         with:
-          sourceDir: '.'
+          zipFilePath: 'extension.zip'
           privateKey: ${{ secrets.EXTENSION_KEY }}
           crxFilePath: 'claude-usage-tracker-local.crx'
         id: crx
