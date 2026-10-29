@@ -24,10 +24,11 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Build dataclasses
+      - name: Build dataclasses and prepare manifest
         run: |
           npm install
           node scripts/build-dataclasses.js
+          cp manifest_chrome.json manifest.json
 
       - name: Create ZIP archive
         run: zip -r extension.zip . -x "*.git*" ".github/*" "node_modules/*" "scripts/*" "common/scripts/*"
@@ -43,7 +44,7 @@ jobs:
       - name: Generate update.xml
         run: |
           APP_ID="${{ steps.crx.outputs.extensionId }}"
-          VERSION=$(jq -r .version manifest_chrome.json)
+          VERSION=$(jq -r .version manifest.json)
           URL="https://raw.githubusercontent.com/${{ github.repository }}/main/claude-usage-tracker-local.crx"
           cat <<EOF > update.xml
           <?xml version='1.0' encoding='UTF-8'?>
