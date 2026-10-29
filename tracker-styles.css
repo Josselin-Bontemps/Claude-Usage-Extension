@@ -195,3 +195,21 @@
     text-align: left;
     /*padding: 0 0.5rem 0.5rem 0.5rem;*/
 }
+
+/* Repère de temps écoulé sur les barres de progression */
+.ut-progress-track {
+  position: relative !important;
+}
+
+.ut-time-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #ffffff;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.8), -1px 0 1px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+  pointer-events: none;
+  transform: translateX(-50%);
+  border-radius: 1px;
+}

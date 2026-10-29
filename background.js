@@ -63,32 +63,21 @@ browser.runtime.onInstalled?.addListener((details) => {
 });
 
 if (browser.contextMenus) {
-	browser.runtime.onInstalled.addListener(() => {
-		browser.contextMenus.create({
-			id: 'openDebugPage',
-			title: 'Open Debug Page',
-			contexts: ['action']
-		});
+    browser.runtime.onInstalled.addListener(() => {
+        browser.contextMenus.create({
+            id: 'openDebugPage',
+            title: 'Open Debug Page',
+            contexts: ['action']
+        });
+    });
 
-		browser.contextMenus.create({
-			id: 'openDonatePage',
-			title: 'Donate',
-			contexts: ['action']
-		});
-
-	});
-
-	browser.contextMenus.onClicked.addListener((info, tab) => {
-		if (info.menuItemId === 'openDebugPage') {
-			browser.tabs.create({
-				url: browser.runtime.getURL('common/log/viewer.html')
-			});
-		} else if (info.menuItemId === 'openDonatePage') {
-			browser.tabs.create({
-				url: "https://ko-fi.com/lugia19"
-			});
-		}
-	});
+    browser.contextMenus.onClicked.addListener((info, tab) => {
+        if (info.menuItemId === 'openDebugPage') {
+            browser.tabs.create({
+                url: browser.runtime.getURL('common/log/viewer.html')
+            });
+        }
+    });
 }
 
 
