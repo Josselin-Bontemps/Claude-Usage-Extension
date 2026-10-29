@@ -196,6 +196,12 @@
     /*padding: 0 0.5rem 0.5rem 0.5rem;*/
 }
 
+/* The sidebar's spacing below the bars comes from the container's own margin only, so the last
+   visible bar adds none of its own. */
+.ut-bars-container > .ut-limit-row:last-child {
+	margin-bottom: 0;
+}
+
 /* Elapsed share of a limit's window. Sits inside the track, whose overflow: hidden keeps it to the
    bar's height; position: relative makes the track its containing block. */
 .ut-progress-track {

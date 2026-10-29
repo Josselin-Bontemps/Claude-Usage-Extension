@@ -356,7 +356,7 @@ class UsageUI {
 
 	async createSidebarElements() {
 		const container = document.createElement('div');
-		container.className = 'ut-usage-sidebar flex flex-col mb-6';
+		container.className = 'ut-usage-sidebar flex flex-col mb-2';
 
 		const { header, toggle } = this.createHeader();
 		const content = document.createElement('div');
@@ -368,29 +368,10 @@ class UsageUI {
 		sectionsContainer.appendChild(this.usageSection.elements.container);
 		content.appendChild(sectionsContainer);
 
-		// Add footers
-		let desktopFooter = null;
-		let qolFooter = null;
-		const isElectron = await sendBackgroundMessage({ type: 'isElectron' });
-		if (!isElectron) {
-			desktopFooter = this.createDesktopFooter();
-			content.appendChild(desktopFooter);
-
-			qolFooter = this.createQoLFooter();
-			if (qolFooter) {
-				content.appendChild(qolFooter);
-			}
-		}
-
-		// Built on every platform, Electron included: unlike the desktop/QoL links a bug report
-		// is relevant wherever the extension runs.
-		const bugFooter = this.createBugFooter();
-		content.appendChild(bugFooter);
-
 		container.appendChild(header);
 		container.appendChild(content);
 
-		const elements = { container, content, toggle, desktopFooter, qolFooter, bugFooter };
+		const elements = { container, content, toggle };
 		toggle.addEventListener('click', () => this.setCollapsed(!this.state.collapsed));
 
 		return elements;
@@ -453,23 +434,6 @@ class UsageUI {
 			Object.keys(prefs).filter(key => !SIDEBAR_LINK_KEYS.includes(key) && !isSidebarItemVisible(prefs, key))
 		);
 
-		// Absent on Electron, where the footers are never built.
-		const desktopFooter = this.elements.sidebar?.desktopFooter;
-		if (desktopFooter) {
-			desktopFooter.style.display = isSidebarItemVisible(prefs, 'desktopLink') ? '' : 'none';
-		}
-
-		// Possibly detached by checkQoLInstalled() when QoL is present; styling it then is harmless.
-		const qolFooter = this.elements.sidebar?.qolFooter;
-		if (qolFooter) {
-			qolFooter.style.display = isSidebarItemVisible(prefs, 'qolLink') ? '' : 'none';
-		}
-
-		const bugFooter = this.elements.sidebar?.bugFooter;
-		if (bugFooter) {
-			bugFooter.style.display = isSidebarItemVisible(prefs, 'bugLink') ? '' : 'none';
-		}
-
 		if (this.state.usageData) this.renderAll();
 	}
 
@@ -492,61 +456,13 @@ class UsageUI {
 
 		const { container, content, toggle } = this.elements.sidebar;
 		content.style.display = collapsed ? 'none' : '';
-		// mb-6 exists to separate the bars from the recents list; with nothing below the
-		// header there's nothing to separate, so claw the space back.
+		// The bottom margin separates the bars from the recents list; with nothing below the
+		// header the header alone needs the same gap.
 		container.style.marginBottom = collapsed ? '0.5rem' : '';
 		container.classList.toggle('ut-collapsed', collapsed);
 		toggle.setAttribute('aria-expanded', String(!collapsed));
 
 		if (persist) browser.storage.local.set({ usageSectionCollapsed: collapsed });
-	}
-
-	createDesktopFooter() {
-		const footer = document.createElement('div');
-		footer.className = 'ut-desktop-footer ut-sidebar-footer mt-1';
-
-		const link = document.createElement('a');
-		link.href = 'https://github.com/lugia19/claude-webext-patcher';
-		link.target = '_blank';
-		link.className = 'ut-link hover:text-text-200';
-		link.style.color = BLUE_HIGHLIGHT;
-		link.textContent = '💻 ' + localize('usage.footer_desktop');
-
-		footer.appendChild(link);
-		return footer;
-	}
-
-	createQoLFooter() {
-		const footer = document.createElement('div');
-		footer.className = 'ut-desktop-footer ut-sidebar-footer mt-1 ut-qol-footer';
-
-		const isChrome = !!window.chrome && (!!window.chrome.webstore || !!window.chrome.runtime);
-		const link = document.createElement('a');
-		link.href = isChrome
-			? 'https://chromewebstore.google.com/detail/claude-qol/dkdnancajokhfclpjpplkhlkbhaeejob'
-			: 'https://addons.mozilla.org/en-US/firefox/addon/claude-qol/';
-		link.target = '_blank';
-		link.className = 'ut-link hover:text-text-200';
-		link.style.color = BLUE_HIGHLIGHT;
-		link.textContent = '⚡ ' + localize('usage.footer_qol');
-
-		footer.appendChild(link);
-		return footer;
-	}
-
-	createBugFooter() {
-		const footer = document.createElement('div');
-		footer.className = 'ut-desktop-footer ut-sidebar-footer mt-1';
-
-		const link = document.createElement('a');
-		link.href = 'https://github.com/lugia19/Claude-Usage-Extension/issues';
-		link.target = '_blank';
-		link.className = 'ut-link hover:text-text-200';
-		link.style.color = BLUE_HIGHLIGHT;
-		link.textContent = '🐛 ' + localize('usage.footer_bug');
-
-		footer.appendChild(link);
-		return footer;
 	}
 
 	createChatElements() {
@@ -875,16 +791,6 @@ class UsageUI {
 		}
 	}
 
-	checkQoLInstalled() {
-		const hasQoL = document.documentElement.hasAttribute('data-claude-qol-installed');
-		if (hasQoL) {
-			const qolFooter = this.elements.sidebar?.container?.querySelector('.ut-qol-footer');
-			if (qolFooter) {
-				qolFooter.remove();
-			}
-		}
-	}
-
 	// ========== UPDATE LOOP ==========
 
 	startUpdateLoop() {
@@ -895,7 +801,6 @@ class UsageUI {
 				this.checkExpiredLimits();
 				this.checkModelChange();
 				this.checkPeakHoursChange();
-				this.checkQoLInstalled();
 				this.mountSidebar();
 				this.mountChatArea();
 			}

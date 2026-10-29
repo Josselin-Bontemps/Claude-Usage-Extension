@@ -1,45 +1,6 @@
 'use strict';
 
-// Settings modal, and the notification cards (common/ui/cards.js) with the tracker's extras.
-
-// Fork: the version card built by common/ui/cards.js gets no Ko-fi button.
-FloatingCard.prototype.addKofiButton = function () { return null; };
-
-const QOL_STORE_URLS = {
-	chrome: 'https://chromewebstore.google.com/detail/claude-qol/dkdnancajokhfclpjpplkhlkbhaeejob',
-	firefox: 'https://addons.mozilla.org/en-US/firefox/addon/claude-qol/',
-};
-
-// ======== Notification card extras ========
-
-// Cross-promotion for Claude QoL, unless it's already installed (it marks <html>).
-function addQoLButton(card) {
-	if (document.documentElement.hasAttribute('data-claude-qol-installed')) return;
-	const link = card.addImageButton(
-		isChromeBrowser() ? QOL_STORE_URLS.chrome : QOL_STORE_URLS.firefox,
-		'qol-badge.png',
-		'Get Claude QoL Extension'
-	);
-	link.querySelector('img').style.borderRadius = '4px';
-}
-
-async function addDesktopFooter(card) {
-	const isElectron = await sendBackgroundMessage({ type: 'isElectron' });
-	if (isElectron) return;
-
-	const footer = document.createElement('div');
-	footer.className = 'ut-desktop-footer';
-
-	const link = document.createElement('a');
-	link.href = 'https://github.com/lugia19/claude-webext-patcher';
-	link.target = '_blank';
-	link.className = 'ut-link';
-	link.style.color = '#2c84db';
-	link.textContent = localize('card.desktop_cta');
-
-	footer.appendChild(link);
-	card.element.appendChild(footer);
-}
+// Settings modal.
 
 // ======== Settings modal ========
 
@@ -70,14 +31,13 @@ function settingsToggle(section, label, checked, onChange = null) {
 // (the modal is rebuilt from storage on each open), and Save commits the lot and reloads: the
 // reload re-applies everything, instead of each control patching the live UI itself.
 async function showSettingsModal() {
-	const [apiKey, resetEnabled, resetThreshold, extraAgainstLimit, stored, sidebarPrefs, isElectron] = await Promise.all([
+	const [apiKey, resetEnabled, resetThreshold, extraAgainstLimit, stored, sidebarPrefs] = await Promise.all([
 		sendBackgroundMessage({ type: 'getAPIKey' }),
 		sendBackgroundMessage({ type: 'getResetNotifEnabled' }),
 		sendBackgroundMessage({ type: 'getResetNotifThreshold' }),
 		sendBackgroundMessage({ type: 'getExtraUsageAgainstLimit' }),
 		browser.storage.local.get(LENGTH_DISPLAY_KEY),
 		getSidebarDisplayPrefs(),
-		sendBackgroundMessage({ type: 'isElectron' }),
 	]);
 
 	// Flex rather than grid: each column takes only the width its content needs, and the right
@@ -147,9 +107,9 @@ async function showSettingsModal() {
 	langSection.appendChild(langSelect);
 	leftColumn.appendChild(langSection);
 
-	// Sidebar display: one switch per bar this account actually has, plus the footer links. Built
-	// from the live usage data, united with the stored keys so a bar hidden before its data loaded
-	// still has a way back on.
+	// Sidebar display: one switch per bar this account actually has. Built from the live usage
+	// data, united with the stored keys so a bar hidden before its data loaded still has a way
+	// back on. Stored link keys (SIDEBAR_LINK_KEYS) are left out: the fork builds no footer links.
 	const sidebarSection = settingsSection(localize('card.section_sidebar_display'));
 	const sidebarBoxes = new Map();
 	const limitKeys = [...new Set([
@@ -161,22 +121,6 @@ async function showSettingsModal() {
 		const label = (usageUI.usageSection?.getLimitLabel(key) ?? key).replace(/\s*[:：]\s*$/, '');
 		sidebarBoxes.set(key, settingsToggle(sidebarSection, label, isSidebarItemVisible(sidebarPrefs, key)));
 	}
-	// Electron never builds the desktop-version footer, and the QoL footer removes itself once QoL
-	// is installed, so only offer toggles for links that can actually show.
-	const linkToggles = [];
-	if (!isElectron) {
-		linkToggles.push(['desktopLink', 'card.sidebar_desktop_link']);
-		if (!document.documentElement.hasAttribute('data-claude-qol-installed')) {
-			linkToggles.push(['qolLink', 'card.sidebar_qol_link']);
-		}
-	}
-	linkToggles.push(['bugLink', 'card.sidebar_bug_link']);
-	linkToggles.forEach(([key, labelKey], i) => {
-		const input = settingsToggle(sidebarSection, localize(labelKey), isSidebarItemVisible(sidebarPrefs, key));
-		// Set the links apart from the bars above them.
-		if (i === 0 && limitKeys.length) sidebarSection.lastElementChild.style.marginTop = '10px';
-		sidebarBoxes.set(key, input);
-	});
 	rightColumn.appendChild(sidebarSection);
 
 	// Extra usage: measured against the monthly spend limit (issue #96, the default for new installs)
@@ -238,30 +182,3 @@ document.addEventListener('ut:toggleSettings', () => {
 	showSettingsModal().catch(error => Log('error', 'Failed to open settings:', error));
 });
 
-// Version-update and rate cards come from common/ui/cards.js (which waits a second first, so other
-// extensions like QoL can load); the donation milestone card is the tracker's own.
-(async () => {
-	try {
-		await localeReady;
-		await initNotificationCards({
-			name: localize('card.title'),
-			releasesUrl: 'https://github.com/lugia19/Claude-Usage-Extension/releases',
-			storeUrls: {
-				chrome: 'https://chromewebstore.google.com/detail/claude-usage-tracker/knemcdpkggnbhpoaaagmjiigenifejfo',
-				firefox: 'https://addons.mozilla.org/firefox/addon/claude-usage-tracker',
-			},
-			storage: {
-				get: async (key) => (await browser.storage.local.get(key))[key],
-				set: (key, value) => browser.storage.local.set({ [key]: value }),
-			},
-			rateDelayDays: 7,
-			decorate: (card, kind) => {
-				if (kind !== 'version') return;
-				addQoLButton(card);
-				addDesktopFooter(card);
-			},
-		});
-	} catch (error) {
-		await Log('error', 'Notification checks failed:', error);
-	}
-})();
