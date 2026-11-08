@@ -1,7 +1,9 @@
 name: Build CRX
 
 # Builds the Chrome variant of the extension, signs it with the EXTENSION_KEY secret, and publishes
-# the signed .crx, an unpacked .zip and the update.xml manifest to the `dist` branch.
+# the signed .crx, an unpacked .zip and the update.xml manifest to the `dist` branch, along with the
+# unpacked Electron variant (Claude Desktop through Claude-WebExtension-Launcher, kept up to date by
+# linux/update-claude-usage-tracker.sh).
 #
 # `dist` is an orphan branch rewritten on every build: it only ever holds the latest files, so the
 # binaries never pile up in the history of `main`, and `main` stays a clean fork of upstream.
@@ -16,6 +18,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'windows/**'
+      - 'linux/**'
       - '**/*.md'
   workflow_dispatch:
 
@@ -84,7 +87,7 @@ jobs:
           # Unanchored patterns: each one matches at any depth (scripts/ and common/scripts/ alike).
           tar -cf - \
             --exclude='.git' --exclude='.git?*' --exclude='.github' \
-            --exclude='node_modules' --exclude='debug' --exclude='scripts' --exclude='docs' --exclude='windows' \
+            --exclude='node_modules' --exclude='debug' --exclude='scripts' --exclude='docs' --exclude='windows' --exclude='linux' \
             --exclude='README.md' --exclude='PRIVACY.md' --exclude='eslint.*' \
             --exclude='package.json' --exclude='package-lock.json' --exclude='*.psd' \
             --exclude='manifest_*.json' --exclude='manifest.json' \
@@ -109,10 +112,30 @@ jobs:
             console.log("Version", m.version);
           '
 
-          # Every file the manifest points to must have made it into the package.
-          STAGE="$STAGE" node -e '
+          # Electron variant: same files, manifest_electron.json with the same build version, the
+          # Chrome variant's name and the public key. With the key, Electron derives the extension ID
+          # from it rather than from the folder path, so the ID (and the data the extension stores)
+          # survives the updater pointing the launcher's folder at a new copy.
+          STAGE_ELECTRON="$RUNNER_TEMP/ext-electron"
+          rm -rf "$STAGE_ELECTRON" && cp -a "$STAGE" "$STAGE_ELECTRON"
+          # EXT_VERSION only reaches the environment in the next step: read it back from the manifest.
+          EXT_VERSION=$(node -p 'require(process.argv[1]).version' "$STAGE/manifest.json")
+          STAGE_ELECTRON="$STAGE_ELECTRON" EXT_VERSION="$EXT_VERSION" node -e '
+            const fs = require("fs");
+            const chrome = JSON.parse(fs.readFileSync("manifest_chrome.json", "utf8"));
+            const m = JSON.parse(fs.readFileSync("manifest_electron.json", "utf8"));
+            m.version = process.env.EXT_VERSION;
+            m.name = chrome.name;
+            m.key = process.env.PUB_KEY;
+            fs.writeFileSync(`${process.env.STAGE_ELECTRON}/manifest.json`, JSON.stringify(m, null, "\t") + "\n");
+            console.log("Electron version", m.version);
+          '
+
+          # Every file each manifest points to must have made it into its package.
+          for DIR in "$STAGE" "$STAGE_ELECTRON"; do
+          DIR="$DIR" node -e '
             const fs = require("fs"), path = require("path");
-            const dir = process.env.STAGE;
+            const dir = process.env.DIR;
             const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
             const exists = f => fs.existsSync(path.join(dir, f));
             const required = [
@@ -125,10 +148,12 @@ jobs:
             // A missing web-accessible resource does not stop the extension from loading.
             const war = (m.web_accessible_resources || []).flatMap(w => w.resources || []).filter(f => !f.includes("*"));
             for (const f of war.filter(f => !exists(f))) console.log(`::warning::Web-accessible resource not found: ${f}`);
-            console.log(`${required.length + war.length} manifest references checked`);
+            console.log(`${dir}: ${required.length + war.length} manifest references checked`);
           '
+          done
 
           echo "STAGE_DIR=$STAGE" >> "$GITHUB_ENV"
+          echo "STAGE_ELECTRON_DIR=$STAGE_ELECTRON" >> "$GITHUB_ENV"
           echo "RAW_BASE=$RAW" >> "$GITHUB_ENV"
 
       - name: Pack and sign the CRX with Chrome
@@ -177,6 +202,8 @@ jobs:
           cp "$STAGE_DIR.crx" "$OUT/$CRX_NAME"
           (cd "$STAGE_DIR" && zip -qr "$OUT/${CRX_BASENAME}.zip" .)
           ZIP_SHA256=$(sha256sum "$OUT/${CRX_BASENAME}.zip" | cut -d' ' -f1)
+          (cd "$STAGE_ELECTRON_DIR" && zip -qr "$OUT/${CRX_BASENAME}-electron.zip" .)
+          ELECTRON_SHA256=$(sha256sum "$OUT/${CRX_BASENAME}-electron.zip" | cut -d' ' -f1)
 
           # Versioned file name: a cached copy of an older .crx can never be served for a newer version.
           cat > "$OUT/update.xml" <<EOF
@@ -197,6 +224,9 @@ jobs:
             "crx": "${RAW_BASE}/${CRX_NAME}",
             "zip": "${RAW_BASE}/${CRX_BASENAME}.zip",
             "zip_sha256": "${ZIP_SHA256}",
+            "electron_version": "${EXT_VERSION}",
+            "electron_zip": "${RAW_BASE}/${CRX_BASENAME}-electron.zip",
+            "electron_zip_sha256": "${ELECTRON_SHA256}",
             "source_commit": "${GITHUB_SHA}"
           }
           EOF
