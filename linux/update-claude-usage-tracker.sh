@@ -361,6 +361,9 @@ do_install() {
         chmod 755 "$target.tmp"
         mv -f "$target.tmp" "$target"
     fi
+    # Le script a pu être téléchargé directement à sa place, sans droit d'exécution : le timer et
+    # les commandes de la documentation le lancent sans passer par bash.
+    chmod 755 "$target"
     write_units "$target"
     if [ -z "${CUT_NO_SYSTEMD:-}" ]; then
         systemctl --user daemon-reload
