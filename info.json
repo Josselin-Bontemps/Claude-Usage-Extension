@@ -1,0 +1,12 @@
+{
+  "id": "lahnmifnmckcjdoaloiamjjdoohmklfb",
+  "version": "6.1.5.11",
+  "update_url": "https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/update.xml",
+  "crx": "https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/claude-usage-tracker-6.1.5.11.crx",
+  "zip": "https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/claude-usage-tracker.zip",
+  "zip_sha256": "fdc5288ad1e7bd73344dd1e0067ec675fc3e4d40ae5e53c9cc7f33e2112241bc",
+  "electron_version": "6.1.5.11",
+  "electron_zip": "https://raw.githubusercontent.com/Josselin-Bontemps/Claude-Usage-Extension/dist/claude-usage-tracker-electron.zip",
+  "electron_zip_sha256": "7b053126ce8e7ca8f7092372604f3f39f118c2e528ec5724c8ca5c36e3344257",
+  "source_commit": "ccbcbdb5ea64092930adc287fb5cafee496ffa42"
+}
