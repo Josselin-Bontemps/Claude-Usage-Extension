@@ -12,16 +12,6 @@ export function isPeakHours() {
 	return hour >= 12 && hour < 18;
 }
 
-// "We looked, and we could not tell which model this is" - distinct from "the caller expressed no
-// opinion about the model", which is what a null/absent override means.
-//
-// An explicit sentinel rather than an undefined-vs-null distinction on purpose: conflating those two
-// is exactly the bug this exists to prevent. The picker read as the tier's default model for weeks
-// because an unreadable picker produced a confident wrong answer instead of admitting ignorance, and
-// nothing downstream could tell the difference.
-//
-// It is only ever passed as an argument, never stored on a ConversationData - the conversation's own
-// unknown model is plain null, matching how every other absent field on that class is represented.
 // Length of each limit's window, used to place the elapsed-time marker on its bar.
 const LIMIT_WINDOW_MS = {
 	session: 5 * 60 * 60 * 1000,
@@ -42,6 +32,16 @@ export function limitElapsedFraction(limitKey, resetsAt, now = Date.now()) {
 	return Math.min(Math.max(1 - remaining / windowMs, 0), 1);
 }
 
+// "We looked, and we could not tell which model this is" - distinct from "the caller expressed no
+// opinion about the model", which is what a null/absent override means.
+//
+// An explicit sentinel rather than an undefined-vs-null distinction on purpose: conflating those two
+// is exactly the bug this exists to prevent. The picker read as the tier's default model for weeks
+// because an unreadable picker produced a confident wrong answer instead of admitting ignorance, and
+// nothing downstream could tell the difference.
+//
+// It is only ever passed as an argument, never stored on a ConversationData - the conversation's own
+// unknown model is plain null, matching how every other absent field on that class is represented.
 export const MODEL_UNKNOWN = '__model_unknown__';
 
 // Model family (Opus/Sonnet/...) for an API model ID; null if unrecognized.
@@ -290,13 +290,24 @@ export class UsageData {
 		return candidates.reduce((a, b) => a.percentage > b.percentage ? a : b);
 	}
 
-	// Session reset info for countdown display
-	getSessionResetInfo() {
+	// The limit the chat stat line is about: the 5-hour session where the plan has one, otherwise the
+	// binding weekly limit for the model. Ultra (formerly Max 20x) has had no session limit since
+	// 2026-11: /usage reports five_hour null and no `session` entry, only the weekly ones.
+	// Decided by what /usage reports, never by tier, so a plan that gains or loses the session limit
+	// just works.
+	getPrimaryLimit(model) {
 		const session = this.limits.session;
-		if (!session) return null;
+		if (session) return { key: 'session', ...session };
+		return this.getBindingWeeklyLimit(model);
+	}
+
+	// Countdown info for a limit key (the stat line's primary limit).
+	getResetInfo(limitKey) {
+		const limit = this.limits[limitKey];
+		if (!limit) return null;
 		return {
-			timestamp: session.resetsAt,
-			expired: session.resetsAt <= Date.now()
+			timestamp: limit.resetsAt,
+			expired: limit.resetsAt <= Date.now()
 		};
 	}
 
