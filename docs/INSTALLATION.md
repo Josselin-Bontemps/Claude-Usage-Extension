@@ -5,7 +5,7 @@ Ce dépôt est un fork de [lugia19/Claude-Usage-Extension](https://github.com/lu
 - **aucune demande de don** : ni bouton dans le popup, ni entrée dans le menu du clic droit sur l'icône, ni lien Ko-fi dans la barre latérale, ni carte de palier de jetons ;
 - **barre latérale épurée** : pas de liens « Version Claude Desktop », « Claude QoL » ni « Signaler un bug », et pas d'interrupteurs correspondants dans les paramètres. L'espace sous les barres se limite à une marge de 8 px après la dernière barre affichée ;
 - **aucune carte flottante** : ni carte « Mise à jour vers la version X » (elle apparaîtrait après chaque compilation du fork), ni carte d'invitation à noter l'extension ;
-- **repère de temps écoulé** : un trait blanc sur chaque barre de limite (session de 5 heures et limites hebdomadaires) indique la part de la plage déjà écoulée. L'infobulle de la barre ajoute la ligne « Temps écoulé : X % de la plage ». Si le remplissage bleu dépasse le repère, la consommation va plus vite que le temps ;
+- **repère de temps écoulé** : un trait blanc sur chaque barre de limite (session de 5 heures et limites hebdomadaires) indique la part de la plage déjà écoulée. Dans la zone de chat, il suit la limite affichée par la barre : la session de 5 heures, ou la limite hebdomadaire la plus avancée sur un forfait sans session ; il disparaît quand la barre affiche la dépense de crédits. L'infobulle de la barre ajoute la ligne « Temps écoulé : X % de la plage ». Si le remplissage bleu dépasse le repère, la consommation va plus vite que le temps ;
 - **nom distinct** : « Claude Usage Tracker (local) », pour ne pas confondre avec la version du Chrome Web Store ;
 - **variante Claude Desktop** : la compilation publie aussi la variante Electron, que `linux/update-claude-usage-tracker.sh` installe et tient à jour dans Claude Desktop sous Linux.
 
@@ -248,13 +248,24 @@ Le script retire le timer, le lien `web-extensions/usage-tracker` et le dossier 
 
 ## Synchronisation avec le dépôt d'origine
 
-Quand l'auteur publie une nouvelle version : bouton **Sync fork** sur la page du dépôt. Le push sur `main` relance la compilation : Brave sous Linux reçoit la mise à jour automatiquement, Brave sous Windows et Claude Desktop sous Linux par leur script.
+Quand l'auteur publie une nouvelle version, deux cas :
 
-Si GitHub signale un conflit, il porte sur l'un des fichiers modifiés par ce fork :
+- **aucun conflit** : le bouton **Sync fork** de la page du dépôt suffit. Il ne suffit que si GitHub ne signale aucun conflit et que la version d'origine ne touche pas au compteur de la zone de chat ni aux barres de limite (sinon le repère de temps écoulé peut rester câblé sur une autre limite que celle affichée, sans conflit visible) ;
+- **sinon** : ouvrir la session Claude Code consacrée à ce fork, ou une nouvelle session sur ce dépôt, et écrire :
+
+  ```text
+  Nouvelle version d'origine X.Y.Z : synchronise
+  ```
+
+  La procédure suivie est décrite dans `CLAUDE.md`. Elle se termine par une demande de fusion vers `main`, à fusionner soi-même.
+
+Le push sur `main` relance la compilation : Brave sous Linux reçoit la mise à jour automatiquement, Brave sous Windows et Claude Desktop sous Linux par leur script.
+
+Les conflits portent sur les fichiers modifiés par ce fork :
 
 - `background.js`, `popup.html`, `popup.js` ;
 - `content-components/content_utils.js`, `content-components/notification_card.js`, `content-components/usage_ui.js` ;
 - `shared/dataclasses.js`, `tracker-styles.css`, `manifest_chrome.json` ;
 - `i18n/en.js`, `i18n/fr.js` et `i18n/all.js` (régénéré par `node common/scripts/build-i18n.js`).
 
-Le sous-module `common` n'est pas modifié : les cartes flottantes qu'il fournit ne sont simplement plus appelées par `content-components/notification_card.js`.
+Le sous-module `common` n'est pas modifié : il pointe sur le commit fixé par la version d'origine, et les cartes flottantes qu'il fournit ne sont simplement plus appelées par `content-components/notification_card.js`.

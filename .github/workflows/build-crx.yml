@@ -88,7 +88,7 @@ jobs:
           tar -cf - \
             --exclude='.git' --exclude='.git?*' --exclude='.github' \
             --exclude='node_modules' --exclude='debug' --exclude='scripts' --exclude='docs' --exclude='windows' --exclude='linux' \
-            --exclude='README.md' --exclude='PRIVACY.md' --exclude='eslint.*' \
+            --exclude='README.md' --exclude='PRIVACY.md' --exclude='CLAUDE.md' --exclude='eslint.*' \
             --exclude='package.json' --exclude='package-lock.json' --exclude='*.psd' \
             --exclude='manifest_*.json' --exclude='manifest.json' \
             --exclude='build.sh' --exclude='build.bat' --exclude='mirror-debug.bat' --exclude='run-android.ps1' \
