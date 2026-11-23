@@ -467,6 +467,29 @@ function getSidebarDesktopAnchor() {
 	};
 }
 
+// Fallback for when claude.ai renames the composer's classes again: walk up from the input to the
+// first ancestor that looks like the composer box (rounded corners plus a background, border or
+// shadow, and shorter than the viewport so the page column can't match), and return its child
+// that holds the input. Only used when the class-based match above finds nothing.
+function findComposerFlowChildByStyle(chatInput) {
+	if (!chatInput) return null;
+	let child = chatInput;
+	let box = chatInput.parentElement;
+	while (box && box !== document.body) {
+		const style = getComputedStyle(box);
+		const rounded = parseFloat(style.borderTopLeftRadius) >= 8;
+		const painted = (style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent')
+			|| parseFloat(style.borderTopWidth) > 0
+			|| style.boxShadow !== 'none';
+		if (rounded && painted && box.offsetHeight < window.innerHeight * 0.8 && child.offsetWidth >= box.clientWidth * 0.8) {
+			return child;
+		}
+		child = box;
+		box = box.parentElement;
+	}
+	return null;
+}
+
 function getChatAreaRegularAnchor() {
 	// Redesigned composer (2026-08): a rounded bg-surface-3 box whose single flow child holds the
 	// input, with the controls either absolutely positioned inside that child (home page) or moved
@@ -479,8 +502,10 @@ function getChatAreaRegularAnchor() {
 	// The box is matched by its `rounded-composer` shape, not its colour: the background token
 	// changed from bg-surface-3 to bg-surface-popover (2026-11) and hid the line. bg-surface-3 is
 	// kept for clients still on the older build.
-	const chatInput = document.querySelector('[data-testid="chat-input"], [data-testid="code-prompt-input"]');
-	const composerFlowChild = chatInput?.closest('.rounded-composer > .relative.w-full.min-w-0, .bg-surface-3 > .relative.w-full.min-w-0');
+	const chatInput = document.querySelector('[data-testid="chat-input"], [data-testid="code-prompt-input"]')
+		|| document.querySelector('[contenteditable="true"][role="textbox"]');
+	const composerFlowChild = chatInput?.closest('.rounded-composer > .relative.w-full.min-w-0, .bg-surface-3 > .relative.w-full.min-w-0')
+		|| findComposerFlowChildByStyle(chatInput);
 	if (composerFlowChild) {
 		return {
 			insertAfter: composerFlowChild,
