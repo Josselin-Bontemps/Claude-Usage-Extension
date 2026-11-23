@@ -2,7 +2,7 @@
 
 Ce dépôt est un fork de [lugia19/Claude-Usage-Extension](https://github.com/lugia19/Claude-Usage-Extension). Ses différences avec l'origine sont décrites en tête de `docs/INSTALLATION.md` : pas de demande de don, barre latérale épurée, pas de carte flottante, repère de temps écoulé, nom « Claude Usage Tracker (local) », variante Claude Desktop.
 
-L'utilisateur est à Montréal (heure de l'Est : America/Toronto). Exprimer les heures dans ce fuseau, par exemple les heures de pointe : 8 h – 14 h en semaine, toute l'année.
+Quand une réponse dépend de l'heure (heures de pointe, réinitialisation d'une limite…), lire l'heure actuelle avec `date` au lieu de la supposer. Ne pas supposer non plus le fuseau horaire de l'utilisateur : le lui demander s'il n'est pas connu.
 
 Le `.gitignore` vient de l'origine et exclut `CLAUDE.md`. Ce fichier est suivi malgré tout. Après une modification, l'ajouter avec `git add -f CLAUDE.md`.
 
