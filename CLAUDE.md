@@ -52,7 +52,7 @@ Demande type : « Nouvelle version d'origine X.Y.Z : synchronise ».
   Une fusion sans conflit peut casser ces points sans que rien ne le signale.
 - **Traductions** : toute clé ajoutée par le fork existe dans `i18n/en.js` et `i18n/fr.js` (par exemple `usage.tooltip_elapsed`).
 - **Fichiers propres au fork** : `.github/workflows/build-crx.yml`, `docs/`, `windows/` et `linux/` n'existent pas dans l'origine ou n'y ont pas cet usage. Ne pas les écraser.
-- **Paquet publié** : le workflow exclut `scripts/`, `docs/`, `windows/`, `linux/` et `CLAUDE.md`. Un nouveau dossier de développement ajouté par l'origine doit être exclu aussi.
+- **Paquet publié** : le workflow exclut `scripts/`, `docs/`, `windows/`, `linux/`, `CLAUDE.md` et les `.translations.json` (manifestes du script de traduction de l'origine). Un nouveau dossier de développement ajouté par l'origine doit être exclu aussi.
 
 ## Style
 
